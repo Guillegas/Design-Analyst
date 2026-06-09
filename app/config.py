@@ -21,14 +21,24 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "designs"
     worker_secret: str
 
-    # Parámetros del pipeline de paleta (afinables sin tocar lógica).
-    kmeans_k: int = 6
-    near_white_threshold: int = 240
-    alpha_threshold: int = 16
-    min_cluster_weight: float = 0.03
-    merge_delta_e: float = 5.0
-    dominant_weight: float = 0.20
-    resize_max_side: int = 200
+    # --- Pipeline v2 (afinables sin tocar lógica) ---
+    # Extracción
+    resize_max_side: int = 512        # lado largo máx para clustering
+    kmeans_k_high: int = 48           # nº de grupos finos antes de fusionar
+    merge_delta_e: float = 3.5        # resolución perceptual: ΔE bajo el que se fusionan colores
+    min_cluster_weight: float = 0.005 # descarta clusters con menos peso (0.5%)
+    max_colors: int = 40              # tope de seguridad de colores extraídos
+    dominant_weight: float = 0.15     # weight >= esto => role 'dominant'
+    alpha_threshold: int = 16         # alpha < esto => píxel transparente, descartar
+    # Fondo
+    bg_border_fraction: float = 0.5   # fracción de borde uniforme para considerarlo fondo
+    bg_merge_delta_e: float = 4.0     # ΔE para borrar píxeles del color de fondo
+    near_white_threshold: int = 250   # fallback: blanco si los 3 canales > esto
+    # Matching
+    candidates_n: int = 5             # nº de tintas candidatas por color
+    quality_excellent: float = 2.0    # ΔE <= esto => 'excellent'
+    quality_good: float = 5.0         # ΔE <= esto => 'good'
+    quality_fair: float = 10.0        # ΔE <= esto => 'fair'; mayor => 'poor' + needs_mix
 
 
 @lru_cache
