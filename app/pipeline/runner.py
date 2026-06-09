@@ -9,7 +9,7 @@ from PIL import Image
 
 from app.config import SKIN_PROFILES, Settings
 from app.pipeline.color import hex_to_rgb, rgb_to_lab
-from app.pipeline.matching import best_match
+from app.pipeline.matching import match_color
 from app.pipeline.palette import extract_palette
 from app.pipeline.skin import precompensate
 from app import supabase_client as sb
@@ -55,12 +55,12 @@ def process_job(job_id: str, settings: Settings) -> None:
         sb.clear_previous_results(client, job_id)
 
         for color in colors:
-            ec_id = sb.insert_extracted_color(client, job_id, color)
             target_rgb = (color["rgb"]["r"], color["rgb"]["g"], color["rgb"]["b"])
             comp_rgb = precompensate(target_rgb, skin_rgb, s)
             comp_lab = rgb_to_lab(*comp_rgb)
-            match = best_match(comp_lab, inks)
-            sb.insert_match_result(client, job_id, ec_id, match.ink_id, match.delta_e)
+            match = match_color(comp_lab, inks, settings)
+            ec_id = sb.insert_extracted_color(client, job_id, color, match)
+            sb.insert_match_candidates(client, job_id, ec_id, match.candidates)
 
         sb.set_status(
             client, job_id, "completed",

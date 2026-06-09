@@ -92,7 +92,7 @@ def clear_previous_results(client: Client, job_id: str) -> None:
     client.table("extracted_colors").delete().eq("analysis_job_id", job_id).execute()
 
 
-def insert_extracted_color(client: Client, job_id: str, color: dict) -> str:
+def insert_extracted_color(client: Client, job_id: str, color: dict, match) -> str:
     row = {
         "analysis_job_id": job_id,
         "hex": color["hex"],
@@ -100,19 +100,24 @@ def insert_extracted_color(client: Client, job_id: str, color: dict) -> str:
         "lab": color["lab"],
         "weight": color["weight"],
         "role": color["role"],
+        "best_delta_e": match.best_delta_e,
+        "match_quality": match.match_quality,
+        "needs_mix": match.needs_mix,
     }
     res = client.table("extracted_colors").insert(row).execute().data
     return res[0]["id"]
 
 
-def insert_match_result(
-    client: Client, job_id: str, extracted_color_id: str, ink_id: str, delta_e: float
+def insert_match_candidates(
+    client: Client, job_id: str, extracted_color_id: str, candidates
 ) -> None:
-    client.table("match_results").insert({
+    rows = [{
         "analysis_job_id": job_id,
         "extracted_color_id": extracted_color_id,
         "match_type": "direct_ink",
-        "ink_id": ink_id,
+        "ink_id": cand.ink_id,
         "ink_mix_id": None,
-        "delta_e": delta_e,
-    }).execute()
+        "delta_e": cand.delta_e,
+        "rank": cand.rank,
+    } for cand in candidates]
+    client.table("match_results").insert(rows).execute()
