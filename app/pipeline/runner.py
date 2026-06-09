@@ -18,8 +18,9 @@ log = logging.getLogger("runner")
 
 
 def process_job(job_id: str, settings: Settings) -> None:
-    client = sb.make_client(settings)
+    client = None
     try:
+        client = sb.make_client(settings)
         job = sb.fetch_job(client, job_id)
 
         # evita doble ejecución (brief §4.1)
