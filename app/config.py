@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Extracción
     resize_max_side: int = 512        # lado largo máx para clustering
     kmeans_k_high: int = 48           # nº de grupos finos antes de fusionar
-    merge_delta_e: float = 3.5        # resolución perceptual: ΔE bajo el que se fusionan colores
+    merge_delta_e: float = 3.0        # resolución perceptual: ΔE bajo el que se fusionan colores
     min_cluster_weight: float = 0.005 # descarta clusters con menos peso (0.5%)
     max_colors: int = 40              # tope de seguridad de colores extraídos
     dominant_weight: float = 0.15     # weight >= esto => role 'dominant'
