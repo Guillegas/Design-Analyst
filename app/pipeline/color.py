@@ -32,3 +32,28 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 
 def rgb_to_hex(r: int, g: int, b: int) -> str:
     return "#{:02X}{:02X}{:02X}".format(int(r), int(g), int(b))
+
+
+import numpy as np
+
+
+def rgb_to_lab_array(rgb: np.ndarray) -> np.ndarray:
+    """Versión vectorizada de rgb_to_lab para (N,3) -> (N,3) sin redondear
+    (precisión interna del clustering). Misma conversión canónica (D65)."""
+    arr = np.asarray(rgb, dtype=np.float64) / 255.0
+    lin = np.where(arr <= 0.04045, arr / 12.92, ((arr + 0.055) / 1.055) ** 2.4)
+    r, g, b = lin[:, 0], lin[:, 1], lin[:, 2]
+    x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+    xn, yn, zn = 0.95047, 1.00000, 1.08883
+    delta = 6 / 29
+
+    def f(t: np.ndarray) -> np.ndarray:
+        return np.where(t > delta ** 3, np.cbrt(t), t / (3 * delta ** 2) + 4 / 29)
+
+    fx, fy, fz = f(x / xn), f(y / yn), f(z / zn)
+    L = 116 * fy - 16
+    a = 500 * (fx - fy)
+    bb = 200 * (fy - fz)
+    return np.stack([L, a, bb], axis=1)

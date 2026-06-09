@@ -22,3 +22,22 @@ def test_known_red_value():
 def test_hex_roundtrip():
     assert hex_to_rgb("#FF8000") == (255, 128, 0)
     assert rgb_to_hex(255, 128, 0) == "#FF8000"
+
+
+import numpy as np
+from app.pipeline.color import rgb_to_lab_array
+
+
+def test_array_matches_scalar():
+    rgbs = [(255, 255, 255), (0, 0, 0), (255, 0, 0), (25, 100, 147), (128, 64, 200)]
+    arr = rgb_to_lab_array(np.array(rgbs, dtype=np.float64))
+    for i, rgb in enumerate(rgbs):
+        L, a, b = rgb_to_lab(*rgb)
+        assert abs(round(float(arr[i, 0]), 2) - L) < 0.01
+        assert abs(round(float(arr[i, 1]), 2) - a) < 0.01
+        assert abs(round(float(arr[i, 2]), 2) - b) < 0.01
+
+
+def test_array_shape():
+    arr = rgb_to_lab_array(np.zeros((10, 3)))
+    assert arr.shape == (10, 3)
