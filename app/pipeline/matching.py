@@ -85,6 +85,8 @@ def consolidate_by_ink(
     ink_lab = {ink.id: ink.lab for ink in inks}
     ordered = sorted(pairs, key=lambda p: p[0]["weight"], reverse=True)
 
+    # agrupación anclada al representante (no transitiva): cada color se compara
+    # solo con la tinta rank-1 del grupo, no con todos sus miembros.
     groups: list[dict] = []
     for color, match in ordered:
         ink_id = match.candidates[0].ink_id
