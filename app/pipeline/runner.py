@@ -9,7 +9,7 @@ from PIL import Image
 
 from app.config import SKIN_PROFILES, Settings
 from app.pipeline.color import hex_to_rgb, rgb_to_lab
-from app.pipeline.matching import match_color
+from app.pipeline.matching import match_color, consolidate_by_ink
 from app.pipeline.palette import extract_palette
 from app.pipeline.skin import precompensate
 from app import supabase_client as sb
@@ -54,11 +54,17 @@ def process_job(job_id: str, settings: Settings) -> None:
         # idempotencia
         sb.clear_previous_results(client, job_id)
 
+        pairs = []
         for color in colors:
             target_rgb = (color["rgb"]["r"], color["rgb"]["g"], color["rgb"]["b"])
             comp_rgb = precompensate(target_rgb, skin_rgb, s)
             comp_lab = rgb_to_lab(*comp_rgb)
             match = match_color(comp_lab, inks, settings)
+            pairs.append((color, match))
+
+        pairs = consolidate_by_ink(pairs, inks, settings)
+
+        for color, match in pairs:
             ec_id = sb.insert_extracted_color(client, job_id, color, match)
             sb.insert_match_candidates(client, job_id, ec_id, match.candidates)
 
@@ -66,7 +72,7 @@ def process_job(job_id: str, settings: Settings) -> None:
             client, job_id, "completed",
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
-        log.info("job %s completado (%d colores)", job_id, len(colors))
+        log.info("job %s completado (%d colores)", job_id, len(pairs))
 
     except Exception as e:  # noqa: BLE001
         log.error("job %s falló: %s\n%s", job_id, e, traceback.format_exc())
