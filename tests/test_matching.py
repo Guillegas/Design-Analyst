@@ -4,6 +4,7 @@ import pytest
 from app.config import get_settings
 from app.pipeline.matching import (
     Ink, Candidate, ColorMatch, match_color, classify_quality, _delta_e_to_refs,
+    consolidate_by_ink,
 )
 
 
@@ -71,3 +72,85 @@ def test_empty_inks_raises(monkeypatch):
     s = _settings(monkeypatch)
     with pytest.raises(ValueError):
         match_color((50.0, 0.0, 0.0), [], s)
+
+
+def _color(weight, role, lab=(50.0, 0.0, 0.0)):
+    l, a, b = lab
+    return {
+        "rgb": {"r": 0, "g": 0, "b": 0},
+        "hex": "#000000",
+        "lab": {"l": l, "a": a, "b": b},
+        "weight": weight,
+        "role": role,
+    }
+
+
+def _match(ink_id, delta_e=0.5):
+    return ColorMatch(
+        candidates=[Candidate(ink_id=ink_id, delta_e=delta_e, rank=1)],
+        best_delta_e=delta_e,
+        match_quality="excellent",
+        needs_mix=False,
+    )
+
+
+def test_consolidate_merges_same_ink(monkeypatch):
+    s = _settings(monkeypatch)
+    inks = [Ink(id="black", lab=(0.0, 0.0, 0.0)), Ink(id="white", lab=(100.0, 0.0, 0.0))]
+    c1, c2 = _color(0.6, "dominant"), _color(0.2, "secondary")
+    m = _match("black")
+    out = consolidate_by_ink([(c1, m), (c2, m)], inks, s)
+    assert len(out) == 1
+    assert out[0][1].candidates[0].ink_id == "black"
+    assert out[0][0]["weight"] == pytest.approx(0.8)
+
+
+def test_consolidate_merges_perceptually_equal_inks(monkeypatch):
+    s = _settings(monkeypatch)
+    # dos negros casi idénticos de dos marcas (ΔE < 2.0)
+    inks = [
+        Ink(id="A_black", lab=(1.0, 0.0, 0.0)),
+        Ink(id="B_black", lab=(1.5, 0.0, 0.0)),
+        Ink(id="white", lab=(100.0, 0.0, 0.0)),
+    ]
+    c1, c2 = _color(0.5, "dominant"), _color(0.3, "secondary")
+    out = consolidate_by_ink([(c1, _match("A_black")), (c2, _match("B_black"))], inks, s)
+    assert len(out) == 1
+    # gana el dominante (mayor peso) -> su tinta A_black
+    assert out[0][1].candidates[0].ink_id == "A_black"
+    assert out[0][0]["weight"] == pytest.approx(0.8)
+
+
+def test_consolidate_keeps_distinct_inks(monkeypatch):
+    s = _settings(monkeypatch)
+    inks = [Ink(id="black", lab=(0.0, 0.0, 0.0)), Ink(id="white", lab=(100.0, 0.0, 0.0))]
+    c1, c2 = _color(0.5, "dominant"), _color(0.4, "secondary")
+    out = consolidate_by_ink([(c1, _match("black")), (c2, _match("white"))], inks, s)
+    assert len(out) == 2
+
+
+def test_consolidate_recomputes_role_to_dominant(monkeypatch):
+    s = _settings(monkeypatch)  # dominant_weight = 0.15
+    inks = [Ink(id="black", lab=(0.0, 0.0, 0.0))]
+    c1, c2 = _color(0.08, "secondary"), _color(0.09, "secondary")
+    m = _match("black")
+    out = consolidate_by_ink([(c1, m), (c2, m)], inks, s)
+    assert len(out) == 1
+    assert out[0][0]["weight"] == pytest.approx(0.17)
+    assert out[0][0]["role"] == "dominant"  # 0.17 >= 0.15
+
+
+def test_consolidate_empty_returns_empty(monkeypatch):
+    s = _settings(monkeypatch)
+    assert consolidate_by_ink([], [], s) == []
+
+
+def test_consolidate_keeps_secondary_when_below_threshold(monkeypatch):
+    s = _settings(monkeypatch)  # dominant_weight = 0.15
+    inks = [Ink(id="black", lab=(0.0, 0.0, 0.0))]
+    c1, c2 = _color(0.05, "secondary"), _color(0.04, "secondary")
+    m = _match("black")
+    out = consolidate_by_ink([(c1, m), (c2, m)], inks, s)
+    assert len(out) == 1
+    assert out[0][0]["weight"] == pytest.approx(0.09)
+    assert out[0][0]["role"] == "secondary"
