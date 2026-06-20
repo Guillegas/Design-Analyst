@@ -87,7 +87,10 @@ def consolidate_by_ink(
 
     groups: list[dict] = []
     for color, match in ordered:
-        rank1_lab = ink_lab[match.candidates[0].ink_id]
+        ink_id = match.candidates[0].ink_id
+        if ink_id not in ink_lab:
+            raise ValueError(f"consolidate_by_ink: tinta '{ink_id}' no está en la lista de inks")
+        rank1_lab = ink_lab[ink_id]
         placed = False
         for g in groups:
             if _delta_e(g["rep_ink_lab"], rank1_lab) < s.ink_merge_delta_e:

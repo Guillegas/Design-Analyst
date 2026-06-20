@@ -138,3 +138,19 @@ def test_consolidate_recomputes_role_to_dominant(monkeypatch):
     assert len(out) == 1
     assert out[0][0]["weight"] == pytest.approx(0.17)
     assert out[0][0]["role"] == "dominant"  # 0.17 >= 0.15
+
+
+def test_consolidate_empty_returns_empty(monkeypatch):
+    s = _settings(monkeypatch)
+    assert consolidate_by_ink([], [], s) == []
+
+
+def test_consolidate_keeps_secondary_when_below_threshold(monkeypatch):
+    s = _settings(monkeypatch)  # dominant_weight = 0.15
+    inks = [Ink(id="black", lab=(0.0, 0.0, 0.0))]
+    c1, c2 = _color(0.05, "secondary"), _color(0.04, "secondary")
+    m = _match("black")
+    out = consolidate_by_ink([(c1, m), (c2, m)], inks, s)
+    assert len(out) == 1
+    assert out[0][0]["weight"] == pytest.approx(0.09)
+    assert out[0][0]["role"] == "secondary"
