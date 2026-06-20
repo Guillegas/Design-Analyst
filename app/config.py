@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     near_white_threshold: int = 250   # fallback: blanco si los 3 canales > esto
     # Matching
     candidates_n: int = 5             # nº de tintas candidatas por color
+    ink_merge_delta_e: float = 2.0    # ΔE bajo el que dos tintas se consideran la misma
     quality_excellent: float = 2.0    # ΔE <= esto => 'excellent'
     quality_good: float = 5.0         # ΔE <= esto => 'good'
     quality_fair: float = 10.0        # ΔE <= esto => 'fair'; mayor => 'poor' + needs_mix

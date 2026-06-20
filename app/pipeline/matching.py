@@ -72,3 +72,41 @@ def match_color(lab: tuple[float, float, float], inks: list[Ink], s: Settings) -
         match_quality=quality,
         needs_mix=best > s.quality_fair,
     )
+
+
+def consolidate_by_ink(
+    pairs: list[tuple[dict, ColorMatch]],
+    inks: list[Ink],
+    s: Settings,
+) -> list[tuple[dict, ColorMatch]]:
+    """Fusiona colores cuya tinta rank-1 es la misma o perceptualmente equivalente
+    (ΔE < ink_merge_delta_e). Gana el color de mayor peso; los pesos se suman y el
+    role se recalcula."""
+    ink_lab = {ink.id: ink.lab for ink in inks}
+    ordered = sorted(pairs, key=lambda p: p[0]["weight"], reverse=True)
+
+    groups: list[dict] = []
+    for color, match in ordered:
+        rank1_lab = ink_lab[match.candidates[0].ink_id]
+        placed = False
+        for g in groups:
+            if _delta_e(g["rep_ink_lab"], rank1_lab) < s.ink_merge_delta_e:
+                g["weight"] += color["weight"]
+                placed = True
+                break
+        if not placed:
+            groups.append({
+                "rep_ink_lab": rank1_lab,
+                "color": color,
+                "match": match,
+                "weight": color["weight"],
+            })
+
+    out: list[tuple[dict, ColorMatch]] = []
+    for g in groups:
+        color = dict(g["color"])
+        color["weight"] = round(g["weight"], 4)
+        is_dominant = color["role"] == "dominant" or g["weight"] >= s.dominant_weight
+        color["role"] = "dominant" if is_dominant else "secondary"
+        out.append((color, g["match"]))
+    return out
