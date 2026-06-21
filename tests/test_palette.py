@@ -52,6 +52,33 @@ def test_lower_merge_threshold_keeps_more_colors(monkeypatch):
     assert len(fine) >= 3
 
 
+def _subject_with_speck(speck_rgb):
+    """Marco blanco (fondo, se elimina) + sujeto gris grande + mancha pequeña
+    cuyo peso queda por debajo de min_cluster_weight (~0.44% del primer plano)."""
+    img = Image.new("RGB", (200, 200), (255, 255, 255))
+    arr = np.array(img)
+    arr[10:190, 10:190] = (90, 80, 70)   # sujeto apagado grande (~32400 px)
+    arr[20:32, 20:32] = speck_rgb        # mancha 12x12 = 144 px (~0.44%)
+    return Image.fromarray(arr)
+
+
+def test_small_vivid_accent_survives(monkeypatch):
+    s = _settings(monkeypatch)
+    # acento amarillo vivo y pequeño: por área se descartaría, por croma se rescata
+    palette = extract_palette(_subject_with_speck((245, 215, 20)), s)
+    assert any(c["rgb"]["r"] > 200 and c["rgb"]["g"] > 170 and c["rgb"]["b"] < 90
+               for c in palette), [c["hex"] for c in palette]
+
+
+def test_small_dull_speck_still_dropped(monkeypatch):
+    s = _settings(monkeypatch)
+    # mancha pequeña pero apagada (baja croma): sigue descartándose por área
+    palette = extract_palette(_subject_with_speck((130, 120, 110)), s)
+    assert all(not (115 < c["rgb"]["r"] < 145 and 105 < c["rgb"]["g"] < 135
+                    and 95 < c["rgb"]["b"] < 125) for c in palette), \
+        [c["hex"] for c in palette]
+
+
 def test_white_background_removed(monkeypatch):
     s = _settings(monkeypatch)
     img = Image.new("RGB", (100, 100), (255, 255, 255))

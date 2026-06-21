@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     kmeans_k_high: int = 60           # nº de grupos finos antes de fusionar
     merge_delta_e: float = 3.0        # resolución perceptual: ΔE bajo el que se fusionan colores
     min_cluster_weight: float = 0.005 # descarta clusters con menos peso (0.5%)
+    # rescate de acentos pequeños pero muy saturados (p.ej. brillos amarillos):
+    # un cluster con croma LAB >= chroma_keep sobrevive aunque su peso esté por
+    # debajo de min_cluster_weight, siempre que alcance min_chroma_weight.
+    chroma_keep: float = 40.0         # croma LAB (sqrt(a^2+b^2)) para considerar 'vivo'
+    min_chroma_weight: float = 0.002  # piso de área (0.2%) para acentos vivos
     max_colors: int = 50              # tope de seguridad de colores extraídos
     dominant_weight: float = 0.15     # weight >= esto => role 'dominant'
     alpha_threshold: int = 16         # alpha < esto => píxel transparente, descartar

@@ -99,9 +99,26 @@ def extract_palette(img: Image.Image, s: Settings) -> list[dict]:
         })
 
     clusters = _merge_perceptual(clusters, s.merge_delta_e)
-    clusters = [c for c in clusters if c["weight"] >= s.min_cluster_weight]
+
+    # filtro por área, con rescate de acentos pequeños muy saturados: un cluster
+    # bajo min_cluster_weight sobrevive si su croma >= chroma_keep y alcanza
+    # min_chroma_weight (evita perder brillos amarillos/acentos vivos diminutos).
+    def _chroma(rgb) -> float:
+        _, a, b = rgb_to_lab(*(int(round(v)) for v in rgb))
+        return (a * a + b * b) ** 0.5
+
+    clusters = [
+        c for c in clusters
+        if c["weight"] >= s.min_cluster_weight
+        or (_chroma(c["rgb"]) >= s.chroma_keep and c["weight"] >= s.min_chroma_weight)
+    ]
     clusters.sort(key=lambda c: c["weight"], reverse=True)
-    clusters = clusters[: s.max_colors]
+    # el tope max_colors no debe expulsar a los acentos vivos rescatados (que por
+    # definición son los de menor peso): reserva sitio para ellos.
+    rescued = [c for c in clusters if c["weight"] < s.min_cluster_weight]
+    main = [c for c in clusters if c["weight"] >= s.min_cluster_weight]
+    keep_n = max(0, s.max_colors - len(rescued))
+    clusters = main[:keep_n] + rescued
 
     wsum = sum(c["weight"] for c in clusters) or 1.0
     for c in clusters:
