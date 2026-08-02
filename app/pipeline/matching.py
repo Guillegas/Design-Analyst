@@ -11,8 +11,13 @@ from app.config import Settings
 
 @dataclass(frozen=True)
 class Ink:
+    """Una candidata de color ya resuelta: un bote del catálogo o una mezcla
+    propia del tatuador (creada en el Lab de la app). Para el matching son lo
+    mismo — un id y un LAB —; `is_user_mix` solo decide cómo se escribe el
+    resultado en `match_results`."""
     id: str
     lab: tuple[float, float, float]
+    is_user_mix: bool = False
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,7 @@ class Candidate:
     ink_id: str
     delta_e: float
     rank: int
+    is_user_mix: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,7 +67,12 @@ def match_color(lab: tuple[float, float, float], inks: list[Ink], s: Settings) -
     des = _delta_e_to_refs(lab, ref_labs)
     order = np.argsort(des)[: s.candidates_n]
     candidates = [
-        Candidate(ink_id=inks[int(i)].id, delta_e=round(float(des[int(i)]), 4), rank=r + 1)
+        Candidate(
+            ink_id=inks[int(i)].id,
+            delta_e=round(float(des[int(i)]), 4),
+            rank=r + 1,
+            is_user_mix=inks[int(i)].is_user_mix,
+        )
         for r, i in enumerate(order)
     ]
     best = candidates[0].delta_e

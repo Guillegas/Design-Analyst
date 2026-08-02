@@ -2,7 +2,10 @@
 
 Worker en Python (FastAPI) que analiza diseños de tatuaje y recomienda qué **bote
 de tinta** del catálogo reproduce cada color, mediante matching perceptual
-(ΔE CIEDE2000). El pipeline es **determinista y trazable**, no IA generativa.
+(ΔE CIEDE2000). En modo "Mis tintas" también compiten las **mezclas propias**
+que el tatuador guarda en el Lab de la app, con el color que la app ya predijo:
+aquí no se calcula ninguna mezcla.
+El pipeline es **determinista y trazable**, no IA generativa.
 La especificación completa está en [`design_analyst.md`](design_analyst.md).
 
 ## Cómo funciona
@@ -26,7 +29,7 @@ wheels estables en versiones más nuevas).
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env   # rellena SUPABASE_SERVICE_ROLE_KEY y WORKER_SECRET
-pytest                 # tests del pipeline (12 tests)
+pytest                 # tests del pipeline y de la capa de I/O (37 tests)
 uvicorn app.main:app --reload
 ```
 

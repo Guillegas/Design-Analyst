@@ -82,6 +82,7 @@ relevantes. Todas las claves son `uuid`.
 | `analysis_source` | text | `brands` o `my_inks` — decide qué tintas son elegibles |
 | `selected_brand_ids` | uuid[] | marcas elegidas (cuando `analysis_source='brands'`); `null` si no |
 | `selected_ink_ids` | uuid[] | botes propios elegidos (cuando `analysis_source='my_inks'`); `null` si no |
+| `selected_mix_ids` | uuid[] | **[Lab]** mezclas propias elegidas (cuando `analysis_source='my_inks'`); `null` si no |
 | `error_message` | text | rellénalo si `status='failed'` |
 | `completed_at` | timestamptz | ponlo al terminar |
 
@@ -133,9 +134,10 @@ relevantes. Todas las claves son `uuid`.
 | `id` | uuid | autogenerado |
 | `analysis_job_id` | uuid → analysis_jobs | |
 | `extracted_color_id` | uuid → extracted_colors | a qué color responde |
-| `match_type` | text | **siempre `direct_ink`** en V1 |
-| `ink_id` | uuid → inks | la tinta recomendada |
-| `ink_mix_id` | uuid | **siempre `null`** en V1 |
+| `match_type` | text | `direct_ink` (bote) o **[Lab]** `user_mix` (mezcla propia) |
+| `ink_id` | uuid → inks | la tinta recomendada; `null` si el match es una mezcla propia |
+| `ink_mix_id` | uuid | **siempre `null`**: las mezclas curadas de catálogo siguen fuera |
+| `user_ink_mix_id` | uuid → user_ink_mixes | **[Lab]** la mezcla propia recomendada; `null` si el match es un bote |
 | `delta_e` | numeric | la distancia perceptual del match (CIEDE2000) |
 
 > **Verifica los nombres/tipos exactos contra la BD real** antes de insertar
@@ -175,7 +177,9 @@ POST /analyze { "job_id": "<uuid>" }   (header X-Worker-Secret: <secreto>)
 
 ### Qué tintas son "elegibles" para el matching
 - `analysis_source == 'brands'` → tintas con `brand_id IN selected_brand_ids`.
-- `analysis_source == 'my_inks'` → tintas con `id IN selected_ink_ids`.
+- `analysis_source == 'my_inks'` → tintas con `id IN selected_ink_ids`, **más**
+  las mezclas propias con `id IN selected_mix_ids` (tabla `user_ink_mixes`), que
+  compiten en la misma comparación de ΔE. **[Lab]**
 - Si el conjunto elegible sale vacío → `failed` con mensaje claro.
 
 ---
@@ -241,7 +245,9 @@ def rgb_to_lab(r: int, g: int, b: int) -> tuple[float, float, float]:
 - Para cada color extraído (ya ajustado por piel, §6), calcula ΔE contra el
   `lab_reference` de cada tinta elegible. Elige el de **menor ΔE**.
 - Escribe `match_results` con `match_type='direct_ink'`, `ink_id`, `delta_e`,
-  `ink_mix_id=null`.
+  `ink_mix_id=null`. Si la candidata ganadora es una mezcla propia, la fila va
+  con `match_type='user_mix'`, `user_ink_mix_id` y los otros dos a `null`: el
+  CHECK `match_results_type_coherence` exige exactamente una columna rellena.
 
 ---
 
@@ -430,8 +436,9 @@ sentido (color/skin/matching son ideales: entrada conocida → salida conocida).
 
 ## 13. Cosas que NO debes hacer en esta V1
 
-- **No** generes mezclas de tintas (`ink_mixes` se queda vacía; `match_type`
-  siempre `direct_ink`).
+- **No** generes ni predigas mezclas. Las mezclas propias llegan ya resueltas
+  desde la app con su `result_lab`; se leen tal cual. `ink_mixes` (mezclas
+  curadas del catálogo) se queda vacía.
 - **No** uses IA generativa para el matching. Pipeline determinista.
 - **No** crees ni modifiques tablas de Supabase (ya existen; solo lees/escribes).
 - **No** metas la service_role key ni el WORKER_SECRET en git.
