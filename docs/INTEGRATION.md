@@ -91,6 +91,7 @@ pero **no publiques la app así**: el secreto sería extraíble del binario.
 | `analysis_source` | text | `brands` o `my_inks` |
 | `selected_brand_ids` | uuid[] | si `brands` |
 | `selected_ink_ids` | uuid[] | si `my_inks` |
+| `selected_mix_ids` | uuid[] | si `my_inks`: mezclas propias del Lab; puede ser `null` |
 | `error_message` | text | lo rellena el worker si falla |
 | `completed_at` | timestamptz | lo pone el worker |
 
@@ -118,9 +119,10 @@ Ahora hay **N filas por color** (una por candidata).
 | `id` | uuid | |
 | `analysis_job_id` | uuid | |
 | `extracted_color_id` | uuid | a qué color responde |
-| `match_type` | text | siempre `direct_ink` |
-| `ink_id` | uuid | → `inks.id` |
-| `ink_mix_id` | uuid | siempre `null` (mezclas = fase futura) |
+| `match_type` | text | `direct_ink` (bote) o `user_mix` (mezcla propia del Lab) |
+| `ink_id` | uuid | → `inks.id`; `null` cuando `match_type='user_mix'` |
+| `ink_mix_id` | uuid | siempre `null` (mezclas curadas de catálogo = fase futura) |
+| `user_ink_mix_id` | uuid | → `user_ink_mixes.id`; `null` cuando `match_type='direct_ink'` |
 | `delta_e` | numeric | distancia de esta candidata |
 | `rank` | int | **[v2]** 1 = mejor, 2..N siguientes |
 
@@ -136,7 +138,8 @@ Por cada `extracted_color` (ordénalos por `weight` desc):
 - Si `needs_mix == true`: muestra aviso "requiere mezcla" (de momento sin receta).
 - Lista sus `match_results` ordenados por `rank` (1..N) → para cada candidata,
   join a `inks` por `ink_id` para nombre + `hex_reference`, y muestra el `delta_e`
-  (cuanto menor, más fiel).
+  (cuanto menor, más fiel). Si `match_type='user_mix'`, el nombre y el color
+  salen de `user_ink_mixes` (`name`, `result_hex`) en vez de `inks`.
 
 Query de lectura (PostgREST / supabase-dart) — un solo embed anidado:
 ```sql

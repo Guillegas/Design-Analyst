@@ -54,26 +54,58 @@ def fetch_skin_profile_name(client: Client, project_id: str) -> str | None:
 
 
 def fetch_eligible_inks(client: Client, job: dict) -> list[Ink]:
+    """Candidatas del job: botes del catálogo y, en modo `my_inks`, también las
+    mezclas propias del tatuador. Las dos van en la misma lista y compiten en la
+    misma comparación de ΔE."""
     source = job["analysis_source"]
-    q = client.table("inks").select("id,lab_reference")
     if source == "brands":
         ids = job.get("selected_brand_ids") or []
         if not ids:
             return []
-        q = q.in_("brand_id", ids)
-    elif source == "my_inks":
-        ids = job.get("selected_ink_ids") or []
-        if not ids:
+        return _fetch_inks(client, "brand_id", ids)
+    if source == "my_inks":
+        ink_ids = job.get("selected_ink_ids") or []
+        mix_ids = job.get("selected_mix_ids") or []
+        if not ink_ids and not mix_ids:
             return []
-        q = q.in_("id", ids)
-    else:
-        raise ValueError(f"analysis_source desconocido: {source}")
-    rows = q.execute().data
+        inks = _fetch_inks(client, "id", ink_ids) if ink_ids else []
+        return inks + (_fetch_user_mixes(client, mix_ids) if mix_ids else [])
+    raise ValueError(f"analysis_source desconocido: {source}")
+
+
+def _fetch_inks(client: Client, column: str, ids: list[str]) -> list[Ink]:
+    rows = (
+        client.table("inks")
+        .select("id,lab_reference")
+        .in_(column, ids)
+        .execute()
+        .data
+    )
     inks = []
     for r in rows:
         lab = r["lab_reference"]
         inks.append(Ink(id=r["id"], lab=(lab["l"], lab["a"], lab["b"])))
     return inks
+
+
+def _fetch_user_mixes(client: Client, mix_ids: list[str]) -> list[Ink]:
+    """Mezclas propias como candidatas. `result_lab` viene ya calculado por la
+    app con la conversión canónica: se lee tal cual, igual que `lab_reference`,
+    sin recalcular nada ni predecir mezclas aquí."""
+    rows = (
+        client.table("user_ink_mixes")
+        .select("id,result_lab")
+        .in_("id", mix_ids)
+        .execute()
+        .data
+    )
+    mixes = []
+    for r in rows:
+        lab = r["result_lab"]
+        mixes.append(
+            Ink(id=r["id"], lab=(lab["l"], lab["a"], lab["b"]), is_user_mix=True)
+        )
+    return mixes
 
 
 def download_image_bytes(client: Client, bucket: str, storage_path: str) -> bytes:
@@ -111,12 +143,16 @@ def insert_extracted_color(client: Client, job_id: str, color: dict, match) -> s
 def insert_match_candidates(
     client: Client, job_id: str, extracted_color_id: str, candidates
 ) -> None:
+    # `match_results_type_coherence` es estricto: exactamente una de las tres
+    # columnas de referencia va rellena, coherente con `match_type`. `ink_mix_id`
+    # (mezclas curadas del catálogo) sigue sin usarse.
     rows = [{
         "analysis_job_id": job_id,
         "extracted_color_id": extracted_color_id,
-        "match_type": "direct_ink",
-        "ink_id": cand.ink_id,
+        "match_type": "user_mix" if cand.is_user_mix else "direct_ink",
+        "ink_id": None if cand.is_user_mix else cand.ink_id,
         "ink_mix_id": None,
+        "user_ink_mix_id": cand.ink_id if cand.is_user_mix else None,
         "delta_e": cand.delta_e,
         "rank": cand.rank,
     } for cand in candidates]

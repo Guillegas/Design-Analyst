@@ -154,3 +154,44 @@ def test_consolidate_keeps_secondary_when_below_threshold(monkeypatch):
     assert len(out) == 1
     assert out[0][0]["weight"] == pytest.approx(0.09)
     assert out[0][0]["role"] == "secondary"
+
+
+def test_user_mix_candidate_keeps_its_flag(monkeypatch):
+    """Una mezcla propia compite como una candidata más, y el resultado dice que
+    lo es: sin el flag no habría forma de escribir el match_type correcto."""
+    s = _settings(monkeypatch)
+    inks = [
+        Ink(id="ink-red", lab=(53.24, 80.09, 67.20)),
+        Ink(id="mix-skin", lab=(50.0, 20.0, 20.0), is_user_mix=True),
+    ]
+    m = match_color((50.0, 20.0, 20.0), inks, s)
+    assert m.candidates[0].ink_id == "mix-skin"
+    assert m.candidates[0].is_user_mix is True
+    assert m.candidates[1].is_user_mix is False
+
+
+def test_ink_and_mix_compete_in_the_same_comparison(monkeypatch):
+    """Botes y mezclas se ordenan juntos por ΔE, no en dos rondas separadas."""
+    s = _settings(monkeypatch)
+    inks = [
+        Ink(id="mix-far", lab=(90.0, 0.0, 0.0), is_user_mix=True),
+        Ink(id="ink-near", lab=(50.5, 0.0, 0.0)),
+        Ink(id="mix-near", lab=(50.1, 0.0, 0.0), is_user_mix=True),
+    ]
+    m = match_color((50.0, 0.0, 0.0), inks, s)
+    assert [c.ink_id for c in m.candidates] == ["mix-near", "ink-near", "mix-far"]
+
+
+def test_consolidate_merges_an_ink_and_a_mix_of_the_same_color(monkeypatch):
+    """La consolidación mira el color, no de dónde viene la candidata."""
+    s = _settings(monkeypatch)
+    inks = [
+        Ink(id="black", lab=(1.0, 0.0, 0.0)),
+        Ink(id="mix-black", lab=(1.5, 0.0, 0.0), is_user_mix=True),
+    ]
+    c1, c2 = _color(0.5, "dominant"), _color(0.3, "secondary")
+    out = consolidate_by_ink(
+        [(c1, _match("mix-black")), (c2, _match("black"))], inks, s
+    )
+    assert len(out) == 1
+    assert out[0][1].candidates[0].ink_id == "mix-black"
